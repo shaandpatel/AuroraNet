@@ -1,0 +1,15 @@
+{
+  "os": "macOS-15.3.1-arm64-arm-64bit",
+  "python": "CPython 3.9.6",
+  "startedAt": "2025-12-09T17:02:33.917695Z",
+  "program": "-m src.models.train",
+  "git": {
+    "remote": "git@github.com:shaandpatel/AuroraNet.git",
+    "commit": "17361ea8ef0bc65ff4fda288f13399d7ef7bcb36"
+  },
+  "email": "shaanpatel98@gmail.com",
+  "root": "/Users/shaanpatel/Desktop/AuroraNet",
+  "host": "Shaans-MacBook-Pro.local",
+  "executable": "/Users/shaanpatel/Desktop/AuroraNet/aurora-env/bin/python3",
+  "writerId": "6iqms0thr5penfnwdir9suzse3ve6jkk"
+}

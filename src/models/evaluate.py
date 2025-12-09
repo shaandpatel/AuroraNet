@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import logging
 import wandb
 import os
+import argparse
 
 from src.models.lstm_model import KpLSTM
 from src.utils import setup_logging
@@ -28,85 +29,119 @@ from src.utils import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# ---------------------------
-# Config
-# ---------------------------
-DATA_PATH = "data/processed/training_dataset.npz"
-MODEL_PATH = "models/saved_model.pth"
-BATCH_SIZE = 64
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-USE_WANDB = True  # set False if you don't want W&B logging
+def main(args):
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(f"Using device: {DEVICE}")
 
-# ---------------------------
-# Load Dataset
-# ---------------------------
-logger.info("Loading dataset for evaluation...")
-data = np.load(DATA_PATH)
-X, y = data["X"], data["y"]
+    run = wandb.init(project=args.project_name, job_type="evaluation")
 
-X_tensor = torch.tensor(X, dtype=torch.float32)
-y_tensor = torch.tensor(y, dtype=torch.float32)
-dataset = TensorDataset(X_tensor, y_tensor)
-loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+    # --- Get Model and Config from W&B Artifact ---
+    logger.info(f"Fetching model artifact: {args.model_artifact}")
+    artifact = run.use_artifact(args.model_artifact, type='model')
+    artifact_dir = artifact.download()
 
-# ---------------------------
-# Load Model
-# ---------------------------
-logger.info("Loading trained model...")
-input_size = X.shape[2]
-output_size = y.shape[1] if len(y.shape) > 1 else 1
-model = KpLSTM(input_size=input_size, hidden_size=64, num_layers=2, output_size=output_size)
-model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-model.to(DEVICE)
-model.eval()
+    # Load config from the artifact, overriding command-line args
+    config = artifact.metadata
+    model_path = os.path.join(artifact_dir, "kp_lstm.pth")
 
-# ---------------------------
-# W&B initialization
-# ---------------------------
-if USE_WANDB:
-    wandb.init(project="aurora-eval", config={"batch_size": BATCH_SIZE})
+    # Update config with runtime args
+    config['data_path'] = args.data_path
+    config['batch_size'] = args.batch_size
+
+    # ---------------------------
+    # Load Dataset
+    # ---------------------------
+    logger.info(f"Loading dataset for evaluation from {config.data_path}...")
+    try:
+        data = np.load(config.data_path)
+        X, y = data["X"], data["y"]
+    except FileNotFoundError:
+        logger.error(f"Data file not found at {config.data_path}. Please generate it first.")
+        return
+
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    y_tensor = torch.tensor(y, dtype=torch.float32)
+    dataset = TensorDataset(X_tensor, y_tensor)
+    loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
+
+    # ---------------------------
+    # Load Model
+    # ---------------------------
+    logger.info(f"Loading trained model from {model_path}...")
+    input_size = X.shape[2]
+    output_size = y.shape[1] if len(y.shape) > 1 else 1
+    
+    model = KpLSTM(
+        input_size=input_size, 
+        hidden_size=config['hidden_size'], 
+        num_layers=config['num_layers'], 
+        output_size=output_size,
+        dropout=config['dropout']
+    )
+    try:
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+    except FileNotFoundError:
+        logger.error(f"Model file not found at {model_path}. Please train a model first.")
+        return
+    except RuntimeError as e:
+        logger.error(f"Error loading model state_dict: {e}")
+        logger.error("This might be due to a mismatch in model architecture (e.g., hidden_size, num_layers).")
+        return
+        
+    model.to(DEVICE)
+    model.eval()
+
     wandb.watch(model, log="all", log_freq=10)
 
-# ---------------------------
-# Prediction and Metrics
-# ---------------------------
-preds, actuals = [], []
+    # ---------------------------
+    # Prediction and Metrics
+    # ---------------------------
+    preds, actuals = [], []
 
-criterion = nn.MSELoss()
-total_loss = 0.0
+    with torch.no_grad():
+        for X_batch, y_batch in loader:
+            X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
+            outputs = model(X_batch)
+            preds.append(outputs.cpu().numpy())
+            actuals.append(y_batch.cpu().numpy())
 
-with torch.no_grad():
-    for X_batch, y_batch in loader:
-        X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
-        outputs = model(X_batch)
-        loss = criterion(outputs, y_batch)
-        total_loss += loss.item() * X_batch.size(0)
-        preds.append(outputs.cpu().numpy())
-        actuals.append(y_batch.cpu().numpy())
+    preds = np.concatenate(preds, axis=0)
+    actuals = np.concatenate(actuals, axis=0)
 
-preds = np.concatenate(preds, axis=0)
-actuals = np.concatenate(actuals, axis=0)
+    # Compute metrics
+    mse = np.mean((preds - actuals) ** 2)
+    mae = np.mean(np.abs(preds - actuals))
+    rmse = np.sqrt(mse)
 
-# Compute metrics
-mse = np.mean((preds - actuals) ** 2)
-mae = np.mean(np.abs(preds - actuals))
-rmse = np.sqrt(mse)
+    logger.info(f"Evaluation Metrics - MSE: {mse:.4f}, MAE: {mae:.4f}, RMSE: {rmse:.4f}")
 
-logger.info(f"Evaluation Metrics - MSE: {mse:.4f}, MAE: {mae:.4f}, RMSE: {rmse:.4f}")
-
-if USE_WANDB:
-    wandb.log({"MSE": mse, "MAE": mae, "RMSE": rmse})
+    wandb.log({"test_mse": mse, "test_mae": mae, "test_rmse": rmse})
+    
+    # Create a plot and log it to W&B
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(actuals[:500], label="Actual Kp")
+    ax.plot(preds[:500], label="Predicted Kp")
+    ax.set_title("Kp Forecast: Predictions vs Actuals (first 500 points)")
+    ax.set_xlabel("Time step")
+    ax.set_ylabel("Kp index")
+    ax.legend()
+    wandb.log({"predictions_vs_actuals": wandb.Image(fig)})
+    plt.close(fig)
+    
     wandb.finish()
 
-# ---------------------------
-# Plot Predictions vs Actuals
-# ---------------------------
-plt.figure(figsize=(12, 6))
-plt.plot(actuals[:500], label="Actual Kp")
-plt.plot(preds[:500], label="Predicted Kp")
-plt.title("Kp Forecast: Predictions vs Actuals (first 500 points)")
-plt.xlabel("Time step")
-plt.ylabel("Kp index")
-plt.legend()
-plt.tight_layout()
-plt.show()
+    logger.info("Evaluation complete.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Evaluate the Kp index forecasting LSTM model.")
+    
+    # W&B artifact to evaluate
+    parser.add_argument("--model_artifact", type=str, default="kp-lstm-model:latest", help="W&B artifact to evaluate. Defaults to the 'latest' alias.")
+    
+    # Runtime settings
+    parser.add_argument("--data_path", type=str, default="datafiles/processed/test_data.npz", help="Path to the test data file.")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for evaluation.")
+    parser.add_argument("--project_name", type=str, default="aurora-forecast", help="W&B project name.")
+
+    args = parser.parse_args()
+    main(args)

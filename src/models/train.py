@@ -32,6 +32,12 @@ def main(args):
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {DEVICE}")
 
+    # For reproducibility
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed)
+        logger.info(f"Set random seed to {args.seed}")
+
     # ---------------------------
     # Initialize W&B
     # ---------------------------
@@ -72,6 +78,11 @@ def main(args):
     input_size = X.shape[2]
     output_size = y.shape[1] if len(y.shape) > 1 else 1
 
+    # --- Add sequence length to config for inference ---
+    # This ensures the inference script knows the model's expected input window size.
+    seq_length = X.shape[1]
+    wandb.config.update({"seq_length": seq_length}, allow_val_change=True)
+
     model = KpLSTM(
         input_size=input_size, 
         hidden_size=config.hidden_size, 
@@ -89,6 +100,8 @@ def main(args):
     # Training loop
     # ---------------------------
     logger.info("Starting training...")
+    best_val_loss = float('inf')
+
     for epoch in range(config.epochs):
         model.train()
         train_losses = []
@@ -115,30 +128,46 @@ def main(args):
         train_loss_mean = np.mean(train_losses)
         val_loss_mean = np.mean(val_losses)
         logger.info(f"Epoch {epoch+1}/{config.epochs} - Train Loss: {train_loss_mean:.4f}, Val Loss: {val_loss_mean:.4f}")
-
+        
         # Log to W&B
         wandb.log({"epoch": epoch+1, "train_loss": train_loss_mean, "val_loss": val_loss_mean})
+
+        # Save the best model based on validation loss
+        if val_loss_mean < best_val_loss:
+            best_val_loss = val_loss_mean
+            model_dir = os.path.dirname(args.model_path)
+            os.makedirs(model_dir, exist_ok=True)
+            torch.save(model.state_dict(), args.model_path)
+            logger.info(f"New best model saved to {args.model_path} (Val Loss: {best_val_loss:.4f})")
+
 
     # ---------------------------
     # Save model
     # ---------------------------
-    model_dir = os.path.dirname(args.model_path)
-    os.makedirs(model_dir, exist_ok=True)
-    torch.save(model.state_dict(), args.model_path)
-    logger.info(f"Saved trained model to {args.model_path}")
+    logger.info(f"Training finished. Best model saved at {args.model_path} with validation loss {best_val_loss:.4f}")
 
     # Save model as a wandb artifact
-    artifact = wandb.Artifact('kp-lstm-model', type='model')
+    # Use a consistent name for the artifact so we can easily reference it.
+    artifact = wandb.Artifact("kp-lstm-model", type='model', metadata=dict(config))
+    
+    # Add model file
     artifact.add_file(args.model_path)
-    wandb.log_artifact(artifact)
+    # Add scaler file (assuming it's in the same dir as the data)
+    if os.path.exists(args.scaler_path):
+        artifact.add_file(args.scaler_path)
+
+    # Log the artifact with an alias that always points to the latest version.
+    wandb.log_artifact(artifact, aliases=["latest"])
 
     wandb.finish()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train the Kp index forecasting LSTM model.")
-    parser.add_argument("--data_path", type=str, default="data/processed/training_data.npz", help="Path to the training data file.")
+    parser.add_argument("--data_path", type=str, default="datafiles/processed/training_data.npz", help="Path to the training data file.")
     parser.add_argument("--model_path", type=str, default="models/kp_lstm.pth", help="Path to save the trained model.")
+    parser.add_argument("--scaler_path", type=str, default="models/scaler.pkl", help="Path to the fitted scaler file.")
     parser.add_argument("--project_name", type=str, default="aurora-forecast", help="W&B project name.")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
     
     # Hyperparameters
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
