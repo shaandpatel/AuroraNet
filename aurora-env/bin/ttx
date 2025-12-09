@@ -1,4 +1,4 @@
-#!/Users/shaanpatel/Desktop/aurora/aurora-env/bin/python3
+#!/Users/shaanpatel/Desktop/AuroraNet/aurora-env/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
