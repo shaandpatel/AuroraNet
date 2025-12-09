@@ -208,8 +208,7 @@ __marimo__/
 
 # Data Files
 datafiles/
-omnidata/
-kpdata/
-histswdata/
+
+# Overview Files
 projectsetup.txt
 projectsetup_2.txt
