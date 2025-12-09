@@ -18,7 +18,7 @@ def fetch_kp_year(file_year: int) -> pd.DataFrame:
     and return NOAA-style Kp time series.
     """
     
-    file_path = Path(f"./src/data/kpdata/{file_year}_DGD.txt")
+    file_path = Path(f"./datafiles/kpdata/{file_year}_DGD.txt")
     if not file_path.exists():
         raise FileNotFoundError(f"Missing file: {file_path}")
 
