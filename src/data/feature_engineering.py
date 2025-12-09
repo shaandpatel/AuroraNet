@@ -15,7 +15,9 @@ def add_moving_averages(df, columns, window=3):
     """
     df_copy = df.copy()
     for col in columns:
-        df_copy[f"{col}_ma{window}"] = df_copy[col].rolling(window).mean()
+        # Calculate the moving average. This will create NaNs at the beginning.
+        ma_col = f"{col}_ma{window}"
+        df_copy[ma_col] = df_copy[col].rolling(window, min_periods=1).mean()
     return df_copy
 
 

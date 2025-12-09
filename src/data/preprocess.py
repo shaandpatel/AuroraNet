@@ -55,7 +55,7 @@ def scale_features(df: pd.DataFrame, feature_cols: list):
     return df_scaled, scaler
 
 
-def make_supervised(df, feature_cols, target_col, window=24, horizon=3):
+def make_supervised(df, feature_cols, target_col, window=24, horizon=3, indices=None):
     """
     Convert a time-series DataFrame into supervised learning windows for
     sequence models like LSTMs or Transformers.
@@ -66,19 +66,33 @@ def make_supervised(df, feature_cols, target_col, window=24, horizon=3):
         target_col (str): Target column name.
         window (int): Number of past timesteps for input.
         horizon (int): Number of future timesteps to predict.
+        indices (np.array, optional): A pre-shuffled list of sample indices to generate. Defaults to sequential.
 
     Returns:
         tuple: (X, y) NumPy arrays ready for model training.
             - X shape: (num_samples, window, num_features)
             - y shape: (num_samples, horizon)
     """
-
-    values = df[feature_cols + [target_col]].values
-    X, y = [], []
-    for i in range(len(values) - window - horizon):
-        X.append(values[i:i+window, :-1])
-        y.append(values[i+window:i+window+horizon, -1])
-    return np.array(X), np.array(y)
-
-
-
+    
+    feature_values = df[feature_cols].values.astype(np.float32)
+    target_values = df[target_col].values.astype(np.float32)
+    
+    num_samples = len(df) - window - horizon + 1
+    if indices is None:
+        indices = np.arange(num_samples)
+    
+    if len(indices) == 0:
+        return np.array([]), np.array([])
+        
+    num_features = len(feature_cols)
+    
+    # Pre-allocate NumPy arrays to be memory efficient
+    X = np.empty((len(indices), window, num_features), dtype=np.float32)
+    y = np.empty((len(indices), horizon), dtype=np.float32)
+    
+    # Use array slicing to fill the pre-allocated arrays
+    for i, sample_idx in enumerate(indices):
+        X[i] = feature_values[sample_idx : sample_idx + window]
+        y[i] = target_values[sample_idx + window : sample_idx + window + horizon]
+        
+    return X, y

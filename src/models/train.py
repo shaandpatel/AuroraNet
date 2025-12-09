@@ -27,6 +27,7 @@ from src.models.lstm_model import KpLSTM
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------
 def main(args):
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -48,39 +49,43 @@ def main(args):
     # Load Dataset
     # ---------------------------
     logger.info(f"Loading dataset from {config.data_path}...")
-    data = np.load(config.data_path)
-    X, y = data["X"], data["y"]
+    # Load the entire dataset into RAM. This is the fastest method if you have enough memory.
+    with np.load(config.data_path) as data:
+        X_train = data["X"]
+        y_train = data["y"]
 
-    X_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(y, dtype=torch.float32)
+    val_data_path = config.data_path.replace("training_data.npz", "test_data.npz")
+    with np.load(val_data_path) as val_data:
+        X_val = val_data["X"]
+        y_val = val_data["y"]
 
-    dataset = TensorDataset(X_tensor, y_tensor)
+    # Convert to PyTorch Tensors. This is a one-time operation.
+    X_train_tensor = torch.from_numpy(X_train)
+    y_train_tensor = torch.from_numpy(y_train)
+    X_val_tensor = torch.from_numpy(X_val)
+    y_val_tensor = torch.from_numpy(y_val)
 
-    # --- Time-series split (NO random shuffling) ---
-    val_size = int(config.val_split * len(dataset))
-    train_size = len(dataset) - val_size
+    # Use the standard, highly optimized TensorDataset
+    train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+    val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
     
-    # Create indices for sequential split
-    indices = list(range(len(dataset)))
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
-
-    train_dataset = Subset(dataset, train_indices)
-    val_dataset = Subset(dataset, val_indices)
-
-    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+    num_workers = 0
+    # shuffle=True is now handled efficiently by the DataLoader on the in-memory data.
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=num_workers)
+    
     logger.info(f"Training set size: {len(train_dataset)}, Validation set size: {len(val_dataset)}")
 
     # ---------------------------
     # Initialize model
     # ---------------------------
-    input_size = X.shape[2]
-    output_size = y.shape[1] if len(y.shape) > 1 else 1
+    input_size = X_train_tensor.shape[2]
+    output_size = y_train_tensor.shape[1] if len(y_train_tensor.shape) > 1 else 1
+
 
     # --- Add sequence length to config for inference ---
     # This ensures the inference script knows the model's expected input window size.
-    seq_length = X.shape[1]
+    seq_length = X_train_tensor.shape[1]
     wandb.config.update({"seq_length": seq_length}, allow_val_change=True)
 
     model = KpLSTM(
@@ -96,15 +101,20 @@ def main(args):
 
     wandb.watch(model, log="all", log_freq=100)
 
+    # Parameter calculation
+    # total_params = sum(p.numel() for p in model.parameters())
+    # print(total_params)
+
     # ---------------------------
     # Training loop
     # ---------------------------
     logger.info("Starting training...")
     best_val_loss = float('inf')
+    early_stopping_counter = 0
 
     for epoch in range(config.epochs):
         model.train()
-        train_losses = []
+        train_losses = []        
         for X_batch, y_batch in train_loader:
             X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
 
@@ -139,10 +149,19 @@ def main(args):
             os.makedirs(model_dir, exist_ok=True)
             torch.save(model.state_dict(), args.model_path)
             logger.info(f"New best model saved to {args.model_path} (Val Loss: {best_val_loss:.4f})")
+            early_stopping_counter = 0  # Reset counter on improvement
+        else:
+            early_stopping_counter += 1
+            logger.info(f"Validation loss did not improve. Early stopping counter: {early_stopping_counter}/{config.early_stopping_patience}")
+
+        # Check for early stopping
+        if early_stopping_counter >= config.early_stopping_patience:
+            logger.info(f"Stopping early as validation loss has not improved for {config.early_stopping_patience} epochs.")
+            break
 
 
     # ---------------------------
-    # Save model
+    # Finalize and Save Artifact
     # ---------------------------
     logger.info(f"Training finished. Best model saved at {args.model_path} with validation loss {best_val_loss:.4f}")
 
@@ -156,6 +175,7 @@ def main(args):
     if os.path.exists(args.scaler_path):
         artifact.add_file(args.scaler_path)
 
+    logger.info(f"Logging artifact '{artifact.name}' to W&B with alias 'latest'...")
     # Log the artifact with an alias that always points to the latest version.
     wandb.log_artifact(artifact, aliases=["latest"])
 
@@ -167,7 +187,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="models/kp_lstm.pth", help="Path to save the trained model.")
     parser.add_argument("--scaler_path", type=str, default="models/scaler.pkl", help="Path to the fitted scaler file.")
     parser.add_argument("--project_name", type=str, default="aurora-forecast", help="W&B project name.")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
+    parser.add_argument("--seed", type=int, default=27, help="Random seed for reproducibility.")
     
     # Hyperparameters
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
@@ -176,7 +196,7 @@ if __name__ == "__main__":
     parser.add_argument("--hidden_size", type=int, default=64, help="LSTM hidden size.")
     parser.add_argument("--num_layers", type=int, default=2, help="Number of LSTM layers.")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate.")
-    parser.add_argument("--val_split", type=float, default=0.2, help="Proportion of data to use for validation.")
+    parser.add_argument("--early_stopping_patience", type=int, default=3, help="Number of epochs to wait for validation loss improvement before stopping.")
 
     args = parser.parse_args()
     main(args)

@@ -51,18 +51,18 @@ def main(args):
     # ---------------------------
     # Load Dataset
     # ---------------------------
-    logger.info(f"Loading dataset for evaluation from {config.data_path}...")
+    logger.info(f"Loading dataset for evaluation from {config['data_path']}...")
     try:
-        data = np.load(config.data_path)
+        data = np.load(config['data_path'])
         X, y = data["X"], data["y"]
     except FileNotFoundError:
-        logger.error(f"Data file not found at {config.data_path}. Please generate it first.")
+        logger.error(f"Data file not found at {config['data_path']}. Please generate it first.")
         return
 
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.float32)
     dataset = TensorDataset(X_tensor, y_tensor)
-    loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
+    loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False)
 
     # ---------------------------
     # Load Model

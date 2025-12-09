@@ -25,10 +25,11 @@ def fetch_omni_data(start_year: int, end_year: int, resolution: int = 1) -> pd.D
     Returns:
         pd.DataFrame: ['time_tag', 'speed', 'density', 'b', 'bz', 'temp'].
     """
-    logger.info(f"Fetching OMNI {resolution}-min data {start_year}-{end_year}...")
+    # Always fetch at the highest resolution (1-minute) to ensure data quality before downsampling.
+    logger.info(f"Fetching OMNI 1-min data {start_year}-{end_year}...")
 
     # Actual fetch via pyomnidata
-    raw = pyomnidata.GetOMNI([start_year, end_year], Res=resolution)
+    raw = pyomnidata.GetOMNI([start_year, end_year], Res=1)
     df = pd.DataFrame.from_records(raw)
 
     # Create a proper datetime index from Date and UT
@@ -46,8 +47,8 @@ def fetch_omni_data(start_year: int, end_year: int, resolution: int = 1) -> pd.D
     # Set time_tag as index and resample to ensure consistent 1-minute frequency
     df = df.set_index('time_tag')
     df = df[["speed", "density", "b", "bz", "temp"]]
-    df = df.resample(f'{resolution}min').mean()  # Resample to the desired frequency
-    df = df.interpolate(method='linear').bfill()  # Interpolate and then back-fill any remaining NaNs
+    # df = df.resample(f'{resolution}min').mean()  # Resample to the desired final resolution
+    # df = df.interpolate(method='linear').bfill()  # Interpolate and then back-fill any remaining NaNs
     
-    logger.info(f"Fetched {len(df)} rows of OMNI data")
+    # logger.info(f"Resampled to {len(df)} rows of OMNI data at {resolution}-minute resolution")
     return df.reset_index()

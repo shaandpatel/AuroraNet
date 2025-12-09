@@ -22,7 +22,7 @@ import joblib
 # Step 1: Fetch data
 # ---------------------------
 print("Fetching example solar wind data...")
-sw_df = fetch_omni_data(start_year=2010, end_year=2011, resolution=1)
+sw_df = fetch_omni_data(start_year=2010, end_year=2011, resolution=24)
 # kp_df = fetch_kp_range(start_year=2010, end_year=2011)
 
 # kp_rt = fetch_recent_kp()
@@ -31,11 +31,11 @@ sw_df = fetch_omni_data(start_year=2010, end_year=2011, resolution=1)
 # # ---------------------------
 # # Step 2: Preprocess
 # # ---------------------------
-print("Cleaning solar wind data...")
-sw_clean = clean_solarwind(sw_df)
+# print("Cleaning solar wind data...")
+# sw_clean = clean_solarwind(sw_df)
 
-print("Adding features...")
-sw_feat = add_time_features(sw_clean)
+# print("Adding features...")
+# sw_feat = add_time_features(sw_clean)
 
 # print("Scaling features...")
 # scaler = joblib.load("models/scaler.pkl")  # must match training scaler

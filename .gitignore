@@ -212,6 +212,7 @@ datafiles/
 # Overview Files
 projectsetup.txt
 projectsetup_2.txt
+wandb/
 
 # Venv
 aurora-env/
