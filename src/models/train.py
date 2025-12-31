@@ -86,7 +86,11 @@ def main(args):
     # --- Add sequence length to config for inference ---
     # This ensures the inference script knows the model's expected input window size.
     seq_length = X_train_tensor.shape[1]
-    wandb.config.update({"seq_length": seq_length}, allow_val_change=True)
+    wandb.config.update({
+        "seq_length": seq_length,
+        "input_size": input_size,
+        "output_size": output_size
+    }, allow_val_change=True)
 
     model = KpLSTM(
         input_size=input_size, 

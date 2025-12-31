@@ -19,6 +19,7 @@ import logging
 import wandb
 import os
 import argparse
+import json
 
 from src.models.lstm_model import KpLSTM
 from src.utils import setup_logging
@@ -115,9 +116,17 @@ def main(args):
 
     logger.info(f"Evaluation Metrics - MSE: {mse:.4f}, MAE: {mae:.4f}, RMSE: {rmse:.4f}")
 
-    wandb.log({"test_mse": mse, "test_mae": mae, "test_rmse": rmse})
+    # Save metrics locally
+    os.makedirs(args.output_dir, exist_ok=True)
+    metrics = {"test_mse": float(mse), "test_mae": float(mae), "test_rmse": float(rmse)}
+    metrics_path = os.path.join(args.output_dir, "metrics.json")
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=4)
+    logger.info(f"Metrics saved to {metrics_path}")
+
+    wandb.log(metrics)
     
-    # Create a plot and log it to W&B
+    # 1. Time Series Plot (First 500 points)
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(actuals[:500], label="Actual Kp")
     ax.plot(preds[:500], label="Predicted Kp")
@@ -125,7 +134,47 @@ def main(args):
     ax.set_xlabel("Time step")
     ax.set_ylabel("Kp index")
     ax.legend()
-    wandb.log({"predictions_vs_actuals": wandb.Image(fig)})
+    
+    ts_plot_path = os.path.join(args.output_dir, "time_series_plot.png")
+    plt.savefig(ts_plot_path)
+    wandb.log({"predictions_vs_actuals_timeseries": wandb.Image(ts_plot_path)})
+    plt.close(fig)
+
+    # 2. Scatter Plot (Actual vs Predicted)
+    # Flatten arrays to handle potential multi-step outputs uniformly
+    flat_actuals = actuals.flatten()
+    flat_preds = preds.flatten()
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.scatter(flat_actuals, flat_preds, alpha=0.3, s=10)
+    
+    # Draw identity line
+    lims = [np.min([ax.get_xlim(), ax.get_ylim()]), np.max([ax.get_xlim(), ax.get_ylim()])]
+    ax.plot(lims, lims, 'r-', alpha=0.75, zorder=0)
+    ax.set_aspect('equal')
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+    ax.set_xlabel('Actual Kp')
+    ax.set_ylabel('Predicted Kp')
+    ax.set_title('Actual vs Predicted Kp')
+    
+    scatter_plot_path = os.path.join(args.output_dir, "scatter_plot.png")
+    plt.savefig(scatter_plot_path)
+    wandb.log({"predictions_vs_actuals_scatter": wandb.Image(scatter_plot_path)})
+    plt.close(fig)
+
+    # 3. Residuals Histogram
+    residuals = flat_actuals - flat_preds
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.hist(residuals, bins=50, alpha=0.7, color='purple', edgecolor='black')
+    ax.axvline(0, color='r', linestyle='--')
+    ax.set_title("Distribution of Residuals (Actual - Predicted)")
+    ax.set_xlabel("Residual")
+    ax.set_ylabel("Frequency")
+    
+    res_plot_path = os.path.join(args.output_dir, "residuals_histogram.png")
+    plt.savefig(res_plot_path)
+    wandb.log({"residuals_histogram": wandb.Image(res_plot_path)})
     plt.close(fig)
     
     wandb.finish()
@@ -142,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, default="datafiles/processed/test_data.npz", help="Path to the test data file.")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for evaluation.")
     parser.add_argument("--project_name", type=str, default="aurora-forecast", help="W&B project name.")
+    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save evaluation results (metrics and plots).")
 
     args = parser.parse_args()
     main(args)

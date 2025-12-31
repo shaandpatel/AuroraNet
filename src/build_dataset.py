@@ -81,7 +81,15 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
     logging.info("Cleaning data and engineering features...")
     df_clean = clean_solarwind(df_merged)
     df_feat = add_time_features(df_clean)
-    feature_cols = [col for col in df_feat.columns if col not in ['kp_index', 'time_tag']]
+    
+    # --- Create Lagged Kp Feature ---
+    # Shift Kp by 1 to ensure we are using strictly past data for the current timestep's feature.
+    # This prevents the raw target 'kp_index' from leaking into the input features.
+    df_feat['kp_prev'] = df_feat['kp_index'].shift(1)
+    df_feat = df_feat.dropna()  # Drop the first row which is now NaN
+
+    # Use 'kp_prev' as a feature, but EXCLUDE the target 'kp_index'
+    feature_cols = [col for col in df_feat.columns if col not in ['time_tag', 'kp_index']]
     target_col = 'kp_index'
     logging.info(f"Using features: {feature_cols}")
 
