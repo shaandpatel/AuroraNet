@@ -39,8 +39,8 @@ def fetch_kp_year(file_year: int) -> pd.DataFrame:
             yyyy, mm, dd = nums[:3]
             base_date = datetime(yyyy, mm, dd)
 
-            # Last 9 numbers = planetary Kp values
-            kp_values = nums[-9:]
+            # Last 8 numbers = planetary Kp values
+            kp_values = nums[-8:]
 
             # Expand each Kp value into 3-hour timestamps
             for i, kp in enumerate(kp_values):

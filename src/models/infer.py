@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import logging
 from src.models.lstm_model import KpLSTM
-from src.data import clean_solarwind, add_time_features, make_supervised, add_moving_averages, fetch_realtime_solarwind, fetch_recent_kp
+from src.data import clean_solarwind, add_time_features, add_moving_averages, fetch_realtime_solarwind, fetch_recent_kp
 from src.utils import setup_logging
 import argparse
 import joblib
@@ -175,7 +175,7 @@ def predict_kp(solarwind_df, model, scaler, seq_length, resolution, device):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inference script for Kp index forecasting.")
-    parser.add_argument("--model_artifact", type=str, required=True, help="W&B artifact to use for inference, e.g., 'aurora-forecast/kp-lstm-model-abc123:v0'")
+    parser.add_argument("--model_artifact", type=str, default='kp-lstm-model:latest', help="W&B artifact to use for inference, e.g., 'aurora-forecast/kp-lstm-model-abc123:v0'")
     parser.add_argument("--input_data_path", type=str, default=None, help="Optional path to local input solar wind data (CSV). If not provided, fetches real-time data.")
     parser.add_argument("--resolution", type=int, default=24, help="Data resolution in minutes (default: 24). Should match the training resolution.")
     
@@ -195,7 +195,7 @@ if __name__ == "__main__":
             try:
                 # Fetch both Solar Wind and Kp data
                 sw_df = fetch_realtime_solarwind()
-                kp_df = fetch_recent_kp()
+                kp_df = fetch_recent_kp(hours=168)  # Fetch 7 days to ensure full overlap with SW data
                 
                 # Merge Kp onto Solar Wind data (SW is higher resolution)
                 # We use merge_asof with direction='backward' to assign the most recent known Kp 

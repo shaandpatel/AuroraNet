@@ -51,13 +51,14 @@ def main(args):
     logger.info(f"Loading dataset from {config.data_path}...")
     # Load the entire dataset into RAM. This is the fastest method if you have enough memory.
     with np.load(config.data_path) as data:
-        X_train = data["X"]
-        y_train = data["y"]
+        X_full = data["X"]
+        y_full = data["y"]
 
-    val_data_path = config.data_path.replace("training_data.npz", "test_data.npz")
-    with np.load(val_data_path) as val_data:
-        X_val = val_data["X"]
-        y_val = val_data["y"]
+    # Split training data into Train and Validation (e.g., 80/20)
+    # We do this internally so the Test set (test_data.npz) remains completely unseen.
+    split_idx = int(len(X_full) * 0.8)
+    X_train, X_val = X_full[:split_idx], X_full[split_idx:]
+    y_train, y_val = y_full[:split_idx], y_full[split_idx:]
 
     # Convert to PyTorch Tensors. This is a one-time operation.
     X_train_tensor = torch.from_numpy(X_train)
