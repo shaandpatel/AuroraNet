@@ -7,7 +7,6 @@ Currently includes:
 These models are used by train.py, evaluate.py, and infer.py.
 """
 
-import torch
 import torch.nn as nn
 
 
