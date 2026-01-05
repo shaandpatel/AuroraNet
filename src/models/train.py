@@ -5,7 +5,7 @@ Features:
 - Loads preprocessed dataset
 - Splits into train/validation sets
 - Trains LSTM
-- Logs metrics and hyperparameters to Weights & Biases (wandb)
+- Logs metrics and hyperparameters to Weights & Biases
 - Saves trained model and scaler
 """
 
@@ -60,7 +60,7 @@ def main(args):
     X_train, X_val = X_full[:split_idx], X_full[split_idx:]
     y_train, y_val = y_full[:split_idx], y_full[split_idx:]
 
-    # Convert to PyTorch Tensors. This is a one-time operation.
+    # Convert to PyTorch Tensors
     X_train_tensor = torch.from_numpy(X_train)
     y_train_tensor = torch.from_numpy(y_train)
     X_val_tensor = torch.from_numpy(X_val)
@@ -71,7 +71,6 @@ def main(args):
     val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
     
     num_workers = 0
-    # shuffle=True is now handled efficiently by the DataLoader on the in-memory data.
     train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=num_workers)
     
@@ -171,7 +170,6 @@ def main(args):
     logger.info(f"Training finished. Best model saved at {args.model_path} with validation loss {best_val_loss:.4f}")
 
     # Save model as a wandb artifact
-    # Use a consistent name for the artifact so we can easily reference it.
     artifact = wandb.Artifact("kp-lstm-model", type='model', metadata=dict(config))
     
     # Add model file
@@ -196,11 +194,11 @@ if __name__ == "__main__":
     
     # Hyperparameters
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training.")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training.")
+    parser.add_argument("--lr", type=float, default=.00633, help="Learning rate.")
     parser.add_argument("--hidden_size", type=int, default=64, help="LSTM hidden size.")
-    parser.add_argument("--num_layers", type=int, default=2, help="Number of LSTM layers.")
-    parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate.")
+    parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers.")
+    parser.add_argument("--dropout", type=float, default=0.2314, help="Dropout rate.")
     parser.add_argument("--early_stopping_patience", type=int, default=3, help="Number of epochs to wait for validation loss improvement before stopping.")
 
     args = parser.parse_args()

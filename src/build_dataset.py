@@ -44,7 +44,7 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
     # 1. Fetch Historical Data
     # ---------------------------
     logging.info(f"Fetching historical data from {start_year} to {end_year}...")
-    sw_df = fetch_omni_data(start_year=start_year, end_year=end_year, resolution=resolution)
+    sw_df = fetch_omni_data(start_year=start_year, end_year=end_year)
     kp_df = fetch_kp_range(start_year=start_year, end_year=end_year)
 
     # --- Add validation check ---
@@ -52,7 +52,6 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
         logging.error("One or both initial dataframes are empty. Aborting. Check data fetching for the specified year range.")
         return
 
-    # --- Pre-emptive fix for duplicate labels ---
     # Group by time_tag and average to remove any duplicate timestamps before merging.
     logging.info("Ensuring timestamp uniqueness before merging...")
     sw_df = sw_df.groupby('time_tag').mean().reset_index()
@@ -88,7 +87,7 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
     df_feat['kp_prev'] = df_feat['kp_index'].shift(1)
     df_feat = df_feat.dropna()  # Drop the first row which is now NaN
 
-    # Use 'kp_prev' as a feature, but EXCLUDE the target 'kp_index'
+    # Use 'kp_prev' as a feature, but exclude the target 'kp_index'
     feature_cols = [col for col in df_feat.columns if col not in ['time_tag', 'kp_index']]
     target_col = 'kp_index'
     logging.info(f"Using features: {feature_cols}")
@@ -105,7 +104,7 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
     # 4. Scale Features
     # ---------------------------
     logging.info("Scaling features (fitting on training data only)...")
-    # Fit the scaler ONLY on the training data to prevent data leakage
+    # Fit the scaler only on the training data to prevent data leakage
     df_train_scaled, scaler = scale_features(df_train, feature_cols)
     
     # Transform the test data using the same scaler

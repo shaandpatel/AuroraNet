@@ -2,17 +2,16 @@
 Evaluate the trained LSTM Kp forecasting model.
 
 Steps:
-1. Load processed validation/test dataset.
+1. Load processed test dataset.
 2. Load trained model and scaler.
 3. Predict Kp values.
 4. Compute evaluation metrics: MSE, MAE, RMSE.
-5. Plot predictions vs. actuals.
+5. Plot predictions vs. actuals, residuals histogram, and time-series plot.
 6. Optionally log results to W&B.
 """
 
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 import logging
@@ -41,13 +40,20 @@ def main(args):
     artifact = run.use_artifact(args.model_artifact, type='model')
     artifact_dir = artifact.download()
 
-    # Load config from the artifact, overriding command-line args
+    # Load config from the artifact
     config = artifact.metadata
     model_path = os.path.join(artifact_dir, "kp_lstm.pth")
 
     # Update config with runtime args
     config['data_path'] = args.data_path
-    config['batch_size'] = args.batch_size
+    
+    if args.batch_size is not None:
+        config['batch_size'] = args.batch_size
+    elif 'batch_size' not in config:
+        config['batch_size'] = 64  # Fallback default if missing in artifact
+        logger.info("Batch size not found in artifact config, defaulting to 64.")
+    else:
+        logger.info(f"Using batch size from training artifact: {config['batch_size']}")
 
     # ---------------------------
     # Load Dataset
@@ -189,7 +195,7 @@ if __name__ == "__main__":
     
     # Runtime settings
     parser.add_argument("--data_path", type=str, default="datafiles/processed/test_data.npz", help="Path to the test data file.")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for evaluation.")
+    parser.add_argument("--batch_size", type=int, default=None, help="Batch size for evaluation. Defaults to training batch size.")
     parser.add_argument("--project_name", type=str, default="aurora-forecast", help="W&B project name.")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save evaluation results (metrics and plots).")
 

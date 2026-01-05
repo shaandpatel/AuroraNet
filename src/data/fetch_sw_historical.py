@@ -1,4 +1,3 @@
-import os
 import logging
 import pandas as pd
 import pyomnidata
@@ -11,16 +10,15 @@ if not logger.hasHandlers():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def fetch_omni_data(start_year: int, end_year: int, resolution: int = 1) -> pd.DataFrame:
+def fetch_omni_data(start_year: int, end_year: int) -> pd.DataFrame:
     """
     Download historical OMNI solar-wind data for model training.
 
-    Provides key solar-wind features: speed, density, Bz, and Bt.
+    Provides key solar-wind features: speed, density, Bz, Bt, and temp.
 
     Args:
         year_start (int): Starting year.
         year_end (int): Ending year (inclusive).
-        resolution (int, optional): Time resolution in minutes. Default is 60 (hourly).
 
     Returns:
         pd.DataFrame: ['time_tag', 'speed', 'density', 'b', 'bz', 'temp'].
@@ -47,8 +45,5 @@ def fetch_omni_data(start_year: int, end_year: int, resolution: int = 1) -> pd.D
     # Set time_tag as index and resample to ensure consistent 1-minute frequency
     df = df.set_index('time_tag')
     df = df[["speed", "density", "b", "bz", "temp"]]
-    # df = df.resample(f'{resolution}min').mean()  # Resample to the desired final resolution
-    # df = df.interpolate(method='linear').bfill()  # Interpolate and then back-fill any remaining NaNs
-    
-    # logger.info(f"Resampled to {len(df)} rows of OMNI data at {resolution}-minute resolution")
+
     return df.reset_index()

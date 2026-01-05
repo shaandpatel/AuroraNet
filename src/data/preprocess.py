@@ -57,8 +57,8 @@ def scale_features(df: pd.DataFrame, feature_cols: list):
 
 def make_supervised(df, feature_cols, target_col, window=24, horizon=3, indices=None):
     """
-    Convert a time-series DataFrame into supervised learning windows for
-    sequence models like LSTMs or Transformers.
+    Convert a time-series DataFrame into supervised learning windows for 
+    sequence model (LSTM).
 
     Args:
         df (pd.DataFrame): Input data with features + target.

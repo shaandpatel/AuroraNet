@@ -5,7 +5,7 @@ Steps:
 1. Load trained model and scaler.
 2. Accept raw/current solar wind features (or preprocessed data).
 3. Apply preprocessing, scaling, and feature engineering.
-4. Predict Kp index (single or multi-step horizon).
+4. Predict Kp index (multi-step horizon).
 5. Return predictions in a user-friendly format.
 """
 

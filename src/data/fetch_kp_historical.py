@@ -32,10 +32,10 @@ def fetch_kp_year(file_year: int) -> pd.DataFrame:
             if not re.match(r"^\d{4}\s+\d{2}\s+\d{2}", line):
                 continue
 
-            # Extract ALL numbers, even glued: [-1-1] → [-1, -1]
+            # Extract all numbers, even glued: [-1-1] → [-1, -1]
             nums = list(map(int, re.findall(r"-?\d+", line)))
 
-            # nums = [YYYY, MM, DD, A_index, K1, K2, ... K9, (next A?), ...]
+            # nums = [YYYY, MM, DD, A_index, K1, K2, ..., K8]
             yyyy, mm, dd = nums[:3]
             base_date = datetime(yyyy, mm, dd)
 
