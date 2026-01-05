@@ -10,7 +10,7 @@ combinations defined in the configuration below.
 import wandb
 
 def main():
-    # Ensure we are logged in to W&B. This prevents "HTTP 400: name required for project query"
+    # Ensure we are logged in to W&B.
     wandb.login()
 
     # Explicitly fetch the default entity (username/team) to ensure the project query is valid
