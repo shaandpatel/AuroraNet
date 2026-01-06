@@ -162,7 +162,7 @@ def main(start_year, end_year, output_dir, test_split_ratio, window, horizon, re
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the full data preparation pipeline for the Aurora project.")
-    parser.add_argument("--start", type=int, default=2010, help="Start year for historical data.")
+    parser.add_argument("--start", type=int, default=1997, help="Start year for historical data.")
     parser.add_argument("--end", type=int, default=2020, help="End year for historical data.")
     parser.add_argument("--output", type=str, default="datafiles/processed", help="Directory to save processed data and artifacts.")
     parser.add_argument("--test_split", type=float, default=0.2, help="Fraction of data to use for the test set.")
