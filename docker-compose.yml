@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - WANDB_API_KEY=${WANDB_API_KEY}  # Reads from your local env
+      - MODEL_ARTIFACT=aurora-forecast/kp-lstm-model:latest
+      - RESOLUTION=24
+    volumes:
+      # Optional: Mount source for live reloading during dev
+      - ./src:/app/src
+      - ./app.py:/app/app.py

@@ -5,3 +5,7 @@ scikit-learn
 matplotlib
 wandb
 joblib
+fastapi
+uvicorn
+pydantic
+requests
