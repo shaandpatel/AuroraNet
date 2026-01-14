@@ -169,7 +169,7 @@ if data:
             tooltip=f"Auroral Boundary (Kp {selected_kp:.1f})"
         ).add_to(m)
         
-        st_folium(m, height=400, use_container_width=True)
+        st_folium(m, height=400, width="100%")
 
     # --- 4. TIME SERIES CHART ---
     st.subheader("Kp Forecast Trend")
@@ -204,7 +204,8 @@ if data:
     )
     
     fig.update_layout(template="plotly_dark", yaxis=dict(range=[0, 9]), margin=dict(l=0, r=0, t=30, b=0))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
+
 
 else:
     st.info("Waiting for data... Ensure backend is running.")

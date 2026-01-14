@@ -8,6 +8,8 @@ WORKDIR /app
 # netcat is often useful for health checks, but optional.
 RUN apt-get update && apt-get install -y \
     build-essential \
+    git \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Copy requirements first (to leverage Docker cache)
