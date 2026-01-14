@@ -1,15 +1,26 @@
 version: '3.8'
 
 services:
+  # The Backend API
   api:
     build: .
+    container_name: aurora_backend
     ports:
       - "8000:8000"
     environment:
-      - WANDB_API_KEY=${WANDB_API_KEY}  # Reads from your local env
-      - MODEL_ARTIFACT=aurora-forecast/kp-lstm-model:latest
-      - RESOLUTION=24
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - PORT=8000
+
+  # The Frontend Dashboard
+  dashboard:
+    image: python:3.10-slim
+    container_name: aurora_frontend
+    working_dir: /app
     volumes:
-      # Optional: Mount source for live reloading during dev
-      - ./src:/app/src
-      - ./app.py:/app/app.py
+      - ./:/app  # Mounts your current folder so you can edit code live
+    command: bash -c "pip install streamlit plotly folium streamlit-folium requests pandas && streamlit run dashboard.py --server.port 8501"
+    ports:
+      - "8501:8501"
+    environment:
+      # CRITICAL: Inside Docker network, we talk to the service name 'api', not 'localhost'
+      - API_URL=http://api:8000/predict

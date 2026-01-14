@@ -9,3 +9,7 @@ fastapi
 uvicorn
 pydantic
 requests
+streamlit
+plotly
+folium
+streamlit-folium
