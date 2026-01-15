@@ -1,9 +1,8 @@
 version: '3.8'
 
 services:
-  # The Backend API
   api:
-    build: .
+    build: .  # Builds from the main Dockerfile (Backend)
     container_name: aurora_backend
     ports:
       - "8000:8000"
@@ -11,16 +10,17 @@ services:
       - WANDB_API_KEY=${WANDB_API_KEY}
       - PORT=8000
 
-  # The Frontend Dashboard
   dashboard:
-    image: python:3.10-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard  # Uses the specific frontend file
     container_name: aurora_frontend
-    working_dir: /app
+    # Mount the volume so we can edit dashboard.py live without rebuilding
     volumes:
-      - ./:/app  # Mounts your current folder so you can edit code live
-    command: bash -c "pip install streamlit plotly folium streamlit-folium requests pandas && streamlit run dashboard.py --server.port 8501"
+      - ./dashboard.py:/app/dashboard.py
     ports:
       - "8501:8501"
     environment:
-      # CRITICAL: Inside Docker network, we talk to the service name 'api', not 'localhost'
       - API_URL=http://api:8000/predict
+    depends_on:
+      - api

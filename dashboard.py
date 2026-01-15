@@ -62,15 +62,26 @@ with st.sidebar:
 # Fetch Logic
 def get_prediction():
     try:
-        with st.spinner("Fetching NOAA data & running inference..."):
-            response = requests.post(API_URL, json={})
+        with st.spinner("Talking to Aurora Backend..."):
+            # Set a timeout so the UI doesn't hang forever if backend is frozen
+            response = requests.post(API_URL, json={}, timeout=10)
+            
             if response.status_code == 200:
                 return response.json()
-            else:
-                st.error(f"API Error: {response.text}")
+            elif response.status_code == 503:
+                st.error("Model is loading. Please try again in 30 seconds.")
                 return None
-    except Exception:
-        st.error("Could not connect to API. Is 'uvicorn app:app' running?")
+            elif response.status_code == 502:
+                st.error("NOAA Data Unavailable. The external data source is down.")
+                return None
+            else:
+                st.error(f"Server Error ({response.status_code}): {response.text}")
+                return None
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to Backend. Is the Docker container running?")
+        return None
+    except requests.exceptions.Timeout:
+        st.error("Backend timed out. It might be calculating initial cache.")
         return None
 
 if 'data' not in st.session_state or st.session_state.get('refresh', False):
@@ -80,6 +91,10 @@ if 'data' not in st.session_state or st.session_state.get('refresh', False):
 data = st.session_state.get('data')
 
 if data:
+    # --- CHECK FOR WARNINGS ---
+    if data.get("warning"):
+        st.warning(f"**{data['warning']}**")
+
     # Prepare Data
     timestamps = data['forecast_timestamps']
     kp_values = data['kp_predictions']
