@@ -12,6 +12,8 @@
 
 The system consists of a **FastAPI** inference engine that processes live NOAA data and a **Streamlit** dashboard that visualizes the auroral oval and visibility probabilities on an interactive map.
 
+![Frontend](results/frontend.png)
+
 ---
 
 ## Key Features
@@ -64,6 +66,8 @@ To optimize the model's performance, we conducted extensive hyperparameter sweep
 - **Batch Size**: [32, 64, 128]
 
 **Result**: The final model uses a sequence length of 72 timesteps with 64 hidden units, achieving the lowest RMSE and most stable learning on the validation set.
+
+![Results](results/residuals_histogram.png)
 
 ### Testing Strategy
 - **Unit Tests**: Validation of feature engineering functions (e.g., ensuring cyclical features remain between -1 and 1).
