@@ -85,7 +85,7 @@ To optimize the model's performance, we conducted extensive hyperparameter sweep
 ### Running with Docker (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/AuroraNet.git
+git clone https://github.com/shaandpatel/AuroraNet.git
 cd AuroraNet
 
 # Create the .env file from the template
