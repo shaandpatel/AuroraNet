@@ -84,6 +84,11 @@ To optimize the model's performance, we conducted extensive hyperparameter sweep
 git clone https://github.com/yourusername/AuroraNet.git
 cd AuroraNet
 
+# Create the .env file from the template
+cp .env.example .env
+
+# Open the new .env file and replace the placeholder text with your actual WandB API key.
+
 # Build and run services
 docker-compose up --build
 ```
