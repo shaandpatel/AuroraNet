@@ -6,13 +6,36 @@ from streamlit_folium import st_folium
 import plotly.graph_objects as go
 import os
 from datetime import datetime
+import numpy as np
 
 # --- CONFIGURATION ---
 API_URL = os.getenv("API_URL", "http://localhost:8000/predict")
 
+# Page Config: "Wide" layout
 st.set_page_config(page_title="Aurora Forecast", page_icon="🌌", layout="wide")
 
-# Database of Cities (Approx Magnetic Latitudes)
+# --- CUSTOM CSS ---
+# Tightening spacing and styling metrics as cards
+st.markdown("""
+    <style>
+        /* Reduce top padding */
+        .block-container { padding-top: 1rem; padding-bottom: 2rem; }
+        
+        /* Style Metric Cards */
+        div[data-testid="stMetric"] {
+            background-color: #1E1E1E;
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        /* Custom Header Font */
+        h1, h2, h3 { font-family: 'Helvetica Neue', sans-serif; font-weight: 300; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- DATA CONSTANTS ---
 CITIES = {
     "Fairbanks, AK": {"coords": [64.84, -147.72], "mlat": 65.5}, 
     "Yellowknife, CA": {"coords": [62.45, -114.37], "mlat": 69.8},
@@ -25,202 +48,166 @@ CITIES = {
     "London, UK":    {"coords": [51.50, -0.12],   "mlat": 47.9}, 
 }
 
+# --- HELPER FUNCTIONS ---
 def get_auroral_status(user_mlat, kp_value):
-    """
-    Calculates visibility based on User MLAT and a specific Kp value.
-    Boundary Formula: MLAT ≈ 67 - 3 * Kp
-    """
     boundary_mlat = 67 - (3 * kp_value)
     delta = user_mlat - boundary_mlat
-    
-    if delta >= 5:
-        return "Very High Chance", "Aurora likely overhead.", boundary_mlat
-    elif 2 <= delta < 5:
-        return "Good Chance", "Aurora likely visible.", boundary_mlat
-    elif 0 <= delta < 2:
-        return "Possible", "Look towards the northern horizon.", boundary_mlat
-    elif -2 <= delta < 0:
-        return "Unlikely", "Only possible during extreme events.", boundary_mlat
-    else:
-        return "Not Expected", "The auroral oval is too far north.", boundary_mlat
+    if delta >= 5: return "Very High", boundary_mlat, "#FF4B4B"  # Red
+    elif 2 <= delta < 5: return "Good", boundary_mlat, "#FFA500" # Orange
+    elif 0 <= delta < 2: return "Possible", boundary_mlat, "#FFFF00" # Yellow
+    else: return "Low", boundary_mlat, "#A0A0A0" # Grey
 
-# --- UI LAYOUT ---
-st.title("🌌 Real-Time Aurora Forecast")
-st.markdown("Physics-based deep learning model predicting geomagnetic activity (Kp Index).")
+def get_prediction():
+    """Fetches data from backend with error handling"""
+    try:
+        response = requests.post(API_URL, json={}, timeout=8)
+        if response.status_code == 200: return response.json()
+    except Exception:
+        return None
+    return None
 
-# Sidebar
+# --- SIDEBAR ---
 with st.sidebar:
-    st.header("Controls")
-    if st.button("Refresh Forecast", type="primary"):
-        st.session_state['refresh'] = True
+    st.title("Settings")
+    selected_city = st.selectbox("Observer Location", list(CITIES.keys()))
+    user_data = CITIES[selected_city]
     
     st.divider()
-    st.markdown("### Location Settings")
-    selected_city = st.selectbox("Select City:", list(CITIES.keys()))
-    user_data = CITIES[selected_city]
+    st.caption(f"Magnetic Lat: {user_data['mlat']}°")
+    if st.button("Reload Data", use_container_width=True):
+        st.cache_data.clear()
 
-# Fetch Logic
-def get_prediction():
-    try:
-        with st.spinner("Talking to Aurora Backend..."):
-            # Set a timeout so the UI doesn't hang forever if backend is frozen
-            response = requests.post(API_URL, json={}, timeout=10)
-            
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 503:
-                st.error("Model is loading. Please try again in 30 seconds.")
-                return None
-            elif response.status_code == 502:
-                st.error("NOAA Data Unavailable. The external data source is down.")
-                return None
-            else:
-                st.error(f"Server Error ({response.status_code}): {response.text}")
-                return None
-    except requests.exceptions.ConnectionError:
-        st.error("Could not connect to Backend. Is the Docker container running?")
-        return None
-    except requests.exceptions.Timeout:
-        st.error("Backend timed out. It might be calculating initial cache.")
-        return None
-
-if 'data' not in st.session_state or st.session_state.get('refresh', False):
+# --- MAIN APP LOGIC ---
+if 'data' not in st.session_state or st.button("Refresh", key="hidden_refresh", help="Hidden trigger"):
     st.session_state['data'] = get_prediction()
-    st.session_state['refresh'] = False
 
 data = st.session_state.get('data')
 
-if data:
-    # --- CHECK FOR WARNINGS ---
-    if data.get("warning"):
-        st.warning(f"**{data['warning']}**")
+# Top Header Row
+col_title, col_status = st.columns([3, 1])
+with col_title:
+    st.title("Geomagnetic Activity Monitor")
+    st.caption("Real-time deep learning inference for auroral oval prediction.")
 
-    # Prepare Data
+if data:
     timestamps = data['forecast_timestamps']
     kp_values = data['kp_predictions']
     
-    # 1. Convert to native Python datetime objects
+    # Process Timestamps
     ts_objects = pd.to_datetime(timestamps).to_pydatetime()
-    
-    formatted_times = [t.strftime('%H:%M %p (UTC)') for t in ts_objects]
-    
-    # --- FORECAST SLIDER ---
-    st.markdown("### Forecast Timeline")
-    st.info("Drag the slider to see the Aurora probability for different times in the future.")
-    
+    formatted_times = [t.strftime('%H:%M UTC') for t in ts_objects]
+
+    # --- 1. INTERACTIVE SLIDER (THE CONTROLLER) ---
+    # We move this UP so it acts as the controller for everything below
     selected_time_str = st.select_slider(
-        "Select Forecast Time:", 
+        "Forecast Timeline", 
         options=formatted_times,
-        value=formatted_times[0]
+        value=formatted_times[0],
+        label_visibility="collapsed" # Cleaner look
     )
     
-    # Get index and specific datetime object
     time_index = formatted_times.index(selected_time_str)
     selected_kp = kp_values[time_index]
     selected_ts = ts_objects[time_index]
 
-    # --- METRICS ---
+    # --- 2. HEADS-UP DISPLAY (METRICS) ---
+    status_text, boundary_mlat, status_color = get_auroral_status(user_data['mlat'], selected_kp)
     max_kp = max(kp_values)
-    max_kp_idx = kp_values.index(max_kp)
-    peak_time_str = formatted_times[max_kp_idx]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric(f"Kp at {selected_time_str}", f"{selected_kp:.2f}")
-    col2.metric("Peak Activity Window", f"{max_kp:.2f}", help=f"Best chance: {peak_time_str}")
     
-    status_header, status_text, boundary_mlat = get_auroral_status(user_data['mlat'], selected_kp)
-    col3.metric("Visibility Status", status_header.split(" ")[0]) 
+    # Using 4 columns for a dashboard strip
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Selected Time", selected_time_str)
+    m2.metric("Predicted Kp", f"{selected_kp:.2f}")
+    m3.metric("Auroral Boundary", f"{boundary_mlat:.1f}° MLAT")
+    m4.markdown(f"""
+        <div style="background-color: {status_color}; color: black; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold;">
+            {status_text} Chance
+        </div>
+    """, unsafe_allow_html=True)
 
-    # --- MAP ---
+    # --- 3. MAIN VISUALIZATION ROW ---
     st.divider()
-    col_map, col_info = st.columns([2, 1])
-    
-    with col_info:
-        st.subheader(f"📍 {selected_city}")
-        st.markdown(f"**Forecast for:** `{selected_time_str}`")
-        st.info(f"**{status_header}**\n\n{status_text}")
-        
-        if selected_kp < max_kp:
-            st.warning(f"💡 Better chance at **{peak_time_str}** (Kp {max_kp:.2f})")
-        
-        with st.expander("Physics Calculation"):
-            st.write(f"**User MLAT:** {user_data['mlat']}°")
-            st.write(f"**Auroral Boundary:** {boundary_mlat:.1f}° MLAT")
-            st.latex(r"\text{Boundary} \approx 67 - 3 \cdot Kp")
-            st.write(f"**Delta:** {user_data['mlat'] - boundary_mlat:.2f}°")
+    col_map, col_chart = st.columns([3, 2])
 
     with col_map:
-        m = folium.Map(location=user_data['coords'], zoom_start=3, tiles="CartoDB dark_matter")
+        st.subheader("Auroral Oval View")
         
-        folium.Marker(
+        # Map Logic
+        m = folium.Map(
+            location=[50, -10], # Center on Atlantic for broader view
+            zoom_start=2, 
+            tiles="CartoDB dark_matter",
+            control_scale=True,
+            zoom_control=False # Cleaner
+        )
+        
+        # User Location - Clean Circle instead of Icon
+        folium.CircleMarker(
             location=user_data['coords'],
-            tooltip=selected_city,
-            icon=folium.Icon(color="blue", icon="user")
+            radius=6,
+            color="#FFFFFF",
+            fill=True,
+            fill_color="#3388ff",
+            fill_opacity=1,
+            tooltip=f"{selected_city} (MLAT: {user_data['mlat']})"
         ).add_to(m)
-        
-        # --- VISUALIZATION LOGIC ---
-        # The relationship between Mag Lat and Geo Lat changes by Longitude.
-        # We calculate the "Green Line" points dynamically to show the tilt.
-        
+
+        # Auroral Boundary Line
         line_coords = []
         for lon in range(-180, 181, 5):
-            # Approximate shift based on longitude
-            # N. America (Lon -120 to -60): Mag is ~10 deg higher -> Line shifts South (-10)
-            # Europe (Lon 0 to 30): Mag is ~3-5 deg lower -> Line shifts North (+4)
-            
-            if -130 <= lon <= -60: # Americas
-                geo_lat = boundary_mlat - 9.5
-            elif -10 <= lon <= 40: # Europe
-                geo_lat = boundary_mlat + 3.5
-            else: # Transition zones (Atlantic/Pacific)
-                geo_lat = boundary_mlat - 2 # Average fallback
-            
+            if -130 <= lon <= -60: geo_lat = boundary_mlat - 9.5
+            elif -10 <= lon <= 40: geo_lat = boundary_mlat + 3.5
+            else: geo_lat = boundary_mlat - 2 
             line_coords.append([geo_lat, lon])
 
+        # Smooth curve 
         folium.PolyLine(
             locations=line_coords,
-            color="#39FF14", 
-            weight=3,
-            tooltip=f"Auroral Boundary (Kp {selected_kp:.1f})"
+            color="#00FFFF", # Cyan 
+            weight=2,
+            opacity=0.8,
+            dash_array='5, 10', # Dashed line implies "Forecast/boundary"
+            tooltip=f"Visibility Boundary (Kp {selected_kp:.1f})"
         ).add_to(m)
+
+        st_folium(m, height=450, width="100%")
+
+    with col_chart:
+        st.subheader("Activity Trend (1 Hour)")
         
-        st_folium(m, height=400, width="100%")
+        fig = go.Figure()
+        
+        # Area chart 
+        fig.add_trace(go.Scatter(
+            x=ts_objects, y=kp_values,
+            fill='tozeroy',
+            mode='lines',
+            line=dict(color='#00FFFF', width=2),
+            fillcolor='rgba(0, 255, 255, 0.1)', # Subtle glow
+            name='Kp Index'
+        ))
 
-    # --- 4. TIME SERIES CHART ---
-    st.subheader("Kp Forecast Trend")
-    fig = go.Figure()
-    
-    # Main Line
-    fig.add_trace(go.Scatter(
-        x=ts_objects, 
-        y=kp_values, 
-        mode='lines+markers', 
-        name='Forecast', 
-        line=dict(color='#00CC96')
-    ))
-    
-    # Storm Threshold
-    fig.add_hline(y=5, line_dash="dash", line_color="red", annotation_text="G1 Storm")
-    
-    fig.add_shape(
-        type="line",
-        x0=selected_ts, y0=0,
-        x1=selected_ts, y1=1,
-        xref="x", yref="paper", # "paper" means y1=1 is the top of the chart
-        line=dict(color="white", width=2, dash="dot")
-    )
+        # Current Time Marker
+        fig.add_vline(x=selected_ts, line_width=1, line_dash="solid", line_color="white")
+        
+        # Minimalist Layout
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=10, r=10, t=10, b=10),
+            yaxis=dict(showgrid=True, gridcolor='#333', range=[0, 9]),
+            xaxis=dict(showgrid=False),
+            showlegend=False,
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Add annotation manually since we aren't using add_vline
-    fig.add_annotation(
-        x=selected_ts, y=8.5,
-        text="Selected",
-        showarrow=False,
-        font=dict(color="white")
-    )
-    
-    fig.update_layout(template="plotly_dark", yaxis=dict(range=[0, 9]), margin=dict(l=0, r=0, t=30, b=0))
-    st.plotly_chart(fig, width="stretch")
-
+    # --- 4. FOOTER INFO ---
+    if data.get("source"):
+        st.caption(f"Data Source: {data['source']} | Last Updated: {data.get('cached_at', 'N/A')}")
+        if data.get("warning"):
+            st.warning(data['warning'])
 
 else:
-    st.info("Waiting for data... Ensure backend is running.")
+    # Empty State (Loading)
+    st.info("Initializing model connection...")
