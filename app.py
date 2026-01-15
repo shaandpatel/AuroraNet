@@ -15,7 +15,7 @@ from src.data import fetch_realtime_solarwind, fetch_recent_kp
 # --- CONFIGURATION ---
 MODEL_ARTIFACT = os.getenv("MODEL_ARTIFACT", "aurora-forecast/kp-lstm-model:latest")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-RESOLUTION = int(os.getenv("RESOLUTION", 60))
+RESOLUTION = int(os.getenv("RESOLUTION", 24))
 CACHE_DURATION_MINUTES = 15 
 
 # --- GLOBAL STATE & CACHE ---
@@ -127,7 +127,7 @@ async def predict_endpoint():
     # --- INFERENCE ---
     try:
         input_df = data_cache["data"]
-        seq_length = config.get('seq_length', 60)
+        seq_length = config.get('seq_length', 72)
         
         kp_pred = predict_kp(input_df, model, scaler, seq_length, RESOLUTION, DEVICE)
 
