@@ -102,7 +102,7 @@ async def predict_endpoint():
             # Merge logic
             input_df = pd.merge_asof(sw_df, kp_df, on='time_tag', direction='backward')
             if 'kp_index' in input_df.columns:
-                input_df['kp_index'] = input_df['kp_index'].fillna(method='bfill')
+                input_df['kp_index'] = input_df['kp_index'].bfill()
 
             # Update Cache
             data_cache["data"] = input_df
