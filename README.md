@@ -69,6 +69,11 @@ To optimize the model's performance, we conducted extensive hyperparameter sweep
 
 ![Results](results/residuals_histogram.png)
 
+### Model Performance
+The final model achieved the following metrics on the test set:
+- **RMSE**: .64182
+- **MAE**: .42117
+
 ### Testing Strategy
 - **Unit Tests**: Validation of feature engineering functions (e.g., ensuring cyclical features remain between -1 and 1).
 - **Integration Tests**: Checking the `/health` and `/predict` endpoints of the API.
