@@ -19,8 +19,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 6. Copy the rest of the application code
-# This copies infer.py, app.py, and the src/ directory
-COPY . .
+# Copy the source directory into the container
+COPY src/ ./src
+
+# Copy the main entry point
+COPY app.py .
+
+# Copy model artifacts
+COPY artifacts/ ./artifacts
 
 # 7. Set Environment Variables
 # Ensures output is logged immediately (useful for debugging)
