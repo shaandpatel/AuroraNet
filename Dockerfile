@@ -26,7 +26,7 @@ COPY src/ ./src
 COPY app.py .
 
 # Copy model artifacts
-COPY artifacts/ ./artifacts
+COPY models/ ./models
 
 # 7. Set Environment Variables
 # Ensures output is logged immediately (useful for debugging)

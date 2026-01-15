@@ -33,9 +33,50 @@ logger = logging.getLogger(__name__)
 # Load model & scaler
 # ---------------------------
 def load_model_from_artifact(model_artifact, device):
-    """
-    Download a model artifact from W&B and load the model and scaler.
-    """
+    # 1. Try Loading Locally First
+    # Define candidate paths for robustness (CWD vs Absolute vs Env Var)
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    candidates = [
+        # 1. Check if the artifact argument is actually a file path
+        (model_artifact, os.path.join(os.path.dirname(model_artifact) if model_artifact else "", "scaler.pkl")),
+        # 2. Check default relative path (depends on CWD)
+        ("models/kp_lstm.pth", "models/scaler.pkl"),
+        # 3. Check absolute path relative to project root (robust for Docker)
+        (os.path.join(base_dir, "models", "kp_lstm.pth"), os.path.join(base_dir, "models", "scaler.pkl"))
+    ]
+
+    model_path = None
+    scaler_path = None
+
+    for mp, sp in candidates:
+        if mp and os.path.exists(mp) and os.path.exists(sp):
+            model_path = mp
+            scaler_path = sp
+            break
+
+    if model_path:
+        logger.info(f"Loading model from local path: {os.path.abspath(model_path)}")
+        scaler = joblib.load(scaler_path)
+        
+        config = {
+            'input_size': scaler.n_features_in_ + 8, 
+            'hidden_size': 64,
+            'num_layers': 1,
+            'output_size': 6,
+            'dropout': 0.2314,
+            'seq_length': 72
+        }
+        
+        model = KpLSTM(input_size=config['input_size'], hidden_size=config['hidden_size'], num_layers=config['num_layers'], output_size=config['output_size'], dropout=config['dropout'])
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.to(device)
+        model.eval()
+        return model, scaler, config
+
+    # 2. Fallback to W&B (Only works if user has credentials)
+    logger.info(f"Local artifacts not found. Attempting W&B download...")
+    logger.warning(f"Checked paths: {[c[0] for c in candidates]}")
     logger.info(f"Fetching model artifact: {model_artifact}")
     run = wandb.init(project="aurora-forecast", job_type="inference")
     artifact = run.use_artifact(model_artifact, type='model')
