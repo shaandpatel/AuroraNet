@@ -216,3 +216,6 @@ wandb/
 
 # Venv
 aurora-env/
+
+# Mac
+.DS_Store
